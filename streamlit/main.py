@@ -27,17 +27,21 @@ class ClusterImage:
         self.image_array = np.reshape(np.array(self.image_obj),(self.shape[0] * self.shape[1], self.shape[2]) )
         self.clustered_image_array = np.reshape(np.array(self.image_obj),(self.shape[0] * self.shape[1], self.shape[2]) )
         self.cluster_image_obj = None
+        self.num_colors = None
+        self.num_colors_clustered = None
 
     def get_clustered_image(self, clusters = 10, clustering_type = "KMeans"):
         match clustering_type:
             case "KMeans":
                 # st.write('kmeans')
                 kmeans = KMeans(n_clusters=clusters, random_state=0, max_iter = 10, n_init=1).fit(self.image_array)
-                for i, pixel in enumerate(stqdm(self.image_array)):
+                for i, pixel in enumerate(stqdm(self.image_array,desc="Generating new image...")):
                     cluster = kmeans.labels_[i]
                     self.clustered_image_array[i] = [int(samp) for samp in kmeans.cluster_centers_[cluster] ]
         
         self.cluster_image_obj = Image.fromarray(np.reshape(self.clustered_image_array, self.shape))
+        self.num_colors =  np.unique(self.image_array, axis=0)
+        self.num_colors_clustered = np.unique(self.clustered_image_array, axis=0)
 
     def graph_color_space(self, clustered_colors=False):
         if clustered_colors:   
@@ -55,32 +59,34 @@ class ClusterImage:
         colfig = px.scatter_3d(new_df, x='Red', y='Green', z='Blue',
                     color='Blue', title= TITLE)
         return colfig
-image_uploaded = False
+if 'image_uploaded' not in st.session_state:
+    st.session_state['image_uploaded'] = False
 image_file = st.file_uploader("Upload Images", type=["png","jpg","jpeg"])
 
 if image_file is not None:
-        image_uploaded = True
-        # To See details
-        file_details = {"filename":image_file.name, "filetype":image_file.type,
-                        "filesize":image_file.size}
-        # st.write(file_details)
+    st.session_state['image_uploaded']  = True
+    # # To See details
+    # file_details = {"filename":image_file.name, "filetype":image_file.type,
+    #                 "filesize":image_file.size}
+    # # st.write(file_details)
 
-        # To View Uploaded Image
-        st.image(load_image(image_file),width=250)
-        cluster_image = ClusterImage((load_image(image_file)))
-        st.write(f"Shape:{cluster_image.shape}")
+    # To View Uploaded Image
+    st.image(load_image(image_file),use_column_width='always')
+    cluster_image = ClusterImage((load_image(image_file)))
+        # st.write(f"Shape:{cluster_image.shape}")
 
-selection = st.selectbox("Select clustering algorithm", ["KMeans", "GMM", "DBSCAN"], disabled= not image_uploaded)
+selection = st.selectbox("Select clustering algorithm", ["KMeans", "GMM", "DBSCAN"], disabled= not st.session_state['image_uploaded'] )
 num_clusters = st.slider("Number of Clusters", 1,50,1)
-st.write(num_clusters)
-if st.button("Begin Clustering", help="Start the color clustering algorithm", disabled= not image_uploaded):
-    st.write("Clustering...")
+clustering = False
+# st.write(num_clusters)
+if st.button("Begin Clustering", help="Start the color clustering algorithm", disabled= not st.session_state['image_uploaded'] ):
+    # st.write("Clustering...")
     cluster_image.get_clustered_image(num_clusters,selection)
-    st.write("Cluster Done")
+    # st.write("Clustering Complete")
 
     figure_unclustered = cluster_image.graph_color_space(clustered_colors=False)
     figure_clustered = cluster_image.graph_color_space(clustered_colors=True)
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns([2,2])
     col1.title("Original Image")
     col1.image(cluster_image.image_obj)
     col1.plotly_chart(figure_unclustered, use_container_width=True)
