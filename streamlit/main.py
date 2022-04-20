@@ -2,14 +2,14 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from PIL import Image
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, DBSCAN, SpectralClustering
 from stqdm import stqdm
 import plotly.express as px
 import random
 from PIL import Image
 from stqdm import stqdm
 import pyautogui
-
+# import hdbscan
 
 st.title("Color Clustering for Image Compression")
 # menu = ["Image","Dataset","DocumentFiles","About"]
@@ -36,7 +36,7 @@ class ClusterImage:
         match clustering_type:
             case "KMeans(SciKit)":
                 # st.write('kmeans')
-                kmeans = KMeans(n_clusters=clusters, random_state=0, max_iter = 10, n_init=1).fit(self.image_array)
+                kmeans = KMeans(n_clusters=clusters, random_state=0, max_iter = st.session_state['maxiterations_kmeans'], n_init=1).fit(self.image_array)
                 for i, pixel in enumerate(stqdm(self.image_array,desc="Generating new image...")):
                     cluster = kmeans.labels_[i]
                     self.clustered_image_array[i] = [int(samp) for samp in kmeans.cluster_centers_[cluster] ]
@@ -44,6 +44,8 @@ class ClusterImage:
                 # st.write("alex")
                 # st.write(f"{clusters, self.shape[0], self.shape[1], self.image_obj.load()}")
                 self.kmeans_(clusters, self.shape[1], self.shape[0], self.image_obj.load(), st.session_state['maxiterations_kmeans'])
+            case "DBSCAN":
+                self.dbscan_helper(st.session_state['DBSCAN_epsilon'], st.session_state['DBSCAN_min_samples'])
 
         
         self.cluster_image_obj = Image.fromarray(np.reshape(self.clustered_image_array, self.shape))
@@ -136,6 +138,32 @@ class ClusterImage:
         #check to make sure the final array equals image width * image height
         # print(len(finalArray))
         self.cluster_image_obj = newImage
+    
+    def dbscan_helper(self, epsilon, min_samples):
+        from sklearn.cluster import KMeans, DBSCAN, SpectralClustering
+        db = DBSCAN(eps=epsilon, min_samples=min_samples).fit(self.image_array)
+        labels = db.labels_
+        cluster_values = {}
+        for l in stqdm(labels, desc="Collecting clusters"):
+            if l in cluster_values.keys():
+                np.append(cluster_values[l], self.image_array[l])
+                pass
+            else:
+                cluster_values[l] = [self.image_array[l]]
+
+        cluster_values_avg = {}
+        for l in stqdm(labels, desc="Averaging cluster members"):
+            if l in cluster_values.keys():
+                # print(cluster_values[l])
+                cluster_values_avg[l] = np.mean(cluster_values[l], axis=0)
+
+        for i, label in enumerate(stqdm(labels,desc="Generating new image...")):
+            self.clustered_image_array[i] = [int(samp) for samp in cluster_values_avg[label] ]
+
+
+        self.cluster_image_obj = Image.fromarray(self.clustered_image_array)
+
+
 
     def graph_color_space(self, clustered_colors=False):
         if clustered_colors:   
@@ -169,16 +197,23 @@ if image_file is not None:
     cluster_image = ClusterImage((load_image(image_file)))
         # st.write(f"Shape:{cluster_image.shape}")
 
-selection = st.selectbox("Select clustering algorithm", ["KMeans(SciKit)", "KMeans", "GMM", "DBSCAN"], disabled= not st.session_state['image_uploaded'] )
+st.session_state['selection'] = st.selectbox("Select clustering algorithm", ["KMeans(SciKit)", "KMeans", "DBSCAN"], disabled= not st.session_state['image_uploaded'] )
 if st.session_state['image_uploaded']:  
-    num_clusters = st.slider("Number of Clusters", 1,50,1)
-if selection == "KMeans":
-    st.session_state['maxiterations_kmeans'] = st.slider("Number of iterations", 1, 15, 3)
-clustering = False
+    
+    match st.session_state['selection']:
+        case "KMeans" | "KMeans(SciKit)":
+            st.session_state['num_clusters'] = st.slider("Number of Clusters", 1,50,1)
+            st.session_state['maxiterations_kmeans'] = st.slider("Number of iterations", 1, 15, 3)
+        case "DBSCAN":
+            # st.session_state['DBSCAN_active'] = True
+            st.session_state['DBSCAN_min_samples'] = st.slider("Minimum Samples", 5,20,1,help="The number of samples (or total weight) in a neighborhood for a point to be considered as a core point. This includes the point itself.")
+            st.session_state['DBSCAN_epsilon'] = st.slider("Epsilon Value", 0.5,2.0,0.5,0.1 ,help="The maximum distance between two samples for one to be considered as in the neighborhood of the other.")
 # st.write(num_clusters)
-if st.button("Begin Clustering", help="Start the color clustering algorithm", disabled= not st.session_state['image_uploaded'] ):
+st.session_state['BeginCluster'] = st.button("Begin Clustering", help="Start the color clustering algorithm", disabled= not st.session_state['image_uploaded'])
+
+if st.session_state['BeginCluster']:
     # st.write("Clustering...")
-    cluster_image.get_clustered_image(num_clusters,selection)
+    cluster_image.get_clustered_image(st.session_state['num_clusters'],st.session_state['selection'])
     # st.write("Clustering Complete")
 
     figure_unclustered = cluster_image.graph_color_space(clustered_colors=False)
@@ -192,7 +227,7 @@ if st.button("Begin Clustering", help="Start the color clustering algorithm", di
     col2.plotly_chart(figure_clustered, use_container_width=True)
     # plotly_chart(figure_clustered, use_container_width=False)
     # st.image(cluster_image.cluster_image_obj,width=250)
- 
+
 if st.button("Reset"):
     pyautogui.hotkey("ctrl","F5")
 
