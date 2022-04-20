@@ -6,6 +6,9 @@ from sklearn.cluster import KMeans
 from stqdm import stqdm
 import plotly.express as px
 import random
+from PIL import Image
+from stqdm import stqdm
+import pyautogui
 
 
 st.title("Color Clustering for Image Compression")
@@ -18,8 +21,7 @@ def load_image(image_file):
 	return img
 
 
-from PIL import Image
-from stqdm import stqdm
+
 class ClusterImage:
     def __init__(self, image_obj):
         self.image_obj = image_obj
@@ -190,7 +192,6 @@ if st.button("Begin Clustering", help="Start the color clustering algorithm", di
     col2.plotly_chart(figure_clustered, use_container_width=True)
     # plotly_chart(figure_clustered, use_container_width=False)
     # st.image(cluster_image.cluster_image_obj,width=250)
-import pyautogui
  
 if st.button("Reset"):
     pyautogui.hotkey("ctrl","F5")
