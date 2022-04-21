@@ -4,6 +4,33 @@ import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 import random
+from matplotlib.pyplot import imshow
+#plot
+def plot(C_cluster, d_data):
+    c_ = ['r', 'g', 'b']
+    l_ = ['group_{}'.format(i+1) for i in range(3)]
+    fig = plt.figure(figsize=(6, 6))
+    ax = fig.add_subplot(111, projection='3d')
+    for i,g in enumerate(C_cluster):
+        ax.scatter(*zip(*d_data[list(g)]), c=c_[i],label=l_[i])
+        plt.legend(loc='lower right')
+    plt.show()
+
+#dataset will be replace with get image
+def load_data():
+    d = load_iris()
+    # print(d.data.shape)
+    # print(d.target)
+    k = len(np.unique(d.target))
+    assert k == 3
+
+    # Sample Data
+    idx = list(range(5)) + list(range(50, 55)) + list(range(100, 105))
+    d_data = d.data[idx, 2:]  # only select 15 samples and two features
+    d_target = d.target[idx]
+    # print(d_targe) # choose 5 from each class
+
+    return d_data, d_target, k
 
 class Load_Data:
     def __init__(self, filename):
@@ -22,8 +49,21 @@ class Load_Data:
     def load(self):
         return self.image_array
 
-class Dist:
-    def Euclidean(x1, x2, p=2):
+
+def get_C_ref(C_cluster, d_target, k):
+    default_C = np.array_split(range(15), 3)
+    C_ref = []
+    for i in range(k):
+        c = np.zeros(shape=k)
+        for j in C_cluster[i]:
+            c[d_target[j]] += 1
+        L = np.argmax(c)
+        C_ref.append(set(default_C[L]))
+        return C_ref
+
+#Distance
+
+def Euclidean(x1, x2, p=2): #works
         return np.sum(np.abs(x1-x2)**p)**float(1/p)
 
 def FindDist(p1, p2):
@@ -31,7 +71,7 @@ def FindDist(p1, p2):
     return dist
 
 #DBSCAN
-def my_Find_Neighbor(imgData, pair, dist, epsilon):
+def my_Find_Neighbor(imgData, pair, epsilon):
     Nbr = set()
     centerPnt = imgData[pair[0]][pair[1]]
     #print(epsilon)
@@ -56,10 +96,7 @@ def my_Find_Neighbor(imgData, pair, dist, epsilon):
                     Nbr.add(tempPair)
     return Nbr
 
-
-
-def myDBSCAN(imgData, epsilon=5, MinPts=3, max_iter = 100, tol=1e-20, diff_type='max', dist=Dist.Euclidean, name = "DBSCAN"):
-    N = len(imgData)*len(imgData[0])
+def DBSCAN(imgData, epsilon, MinPts=3, max_iter = 100):
     H = len(imgData)
     W = len(imgData[0])
     omega = set()                   #2d set holding [H][W] of pixel (Primaries)
@@ -67,23 +104,25 @@ def myDBSCAN(imgData, epsilon=5, MinPts=3, max_iter = 100, tol=1e-20, diff_type=
     for i in range(0, H):
         for j in range(0, W):
             pair = (i, j)
-            Nbr = my_Find_Neighbor(imgData, pair, dist, epsilon)    #array of Neighbor coords
+            Nbr = my_Find_Neighbor(imgData, pair, epsilon)    #array of Neighbor coords
             Nbr_all[i][j] = Nbr                                     #array of Nbr arrays
             if len(Nbr) >= MinPts:
                 omega.add(pair)
         print(i)
-    print(H*W)
-    print(len(omega))
+    #print(H*W)
+    #print(len(omega))
 
     cluster = 0                 #Number of Clusters
     unvisited = [[True for x in range(W)] for y in range(H)]
 
     ClusterArr = [[0 for x in range(W*H)] for y in range(max_iter)]
-
+    unvisited_old = [[True for x in range(W)] for y in range(H)]
     while(len(omega) != 0):
-        print("A")
-
-        unvisited_old = unvisited.copy()
+        #print("A")
+        for i in range(0, len(unvisited)):
+            for j in range(0, len(unvisited[0])):
+                unvisited_old[i][j] = unvisited[i][j]
+        #unvisited_old = unvisited.copy()
         randIdxArr = []
         for i in range(10):
             randIdx = (np.random.randint(H), np.random.randint(W))
@@ -96,8 +135,8 @@ def myDBSCAN(imgData, epsilon=5, MinPts=3, max_iter = 100, tol=1e-20, diff_type=
             if len(Nbr_all[curCenter[0]][curCenter[1]]) >= MinPts:
                 delta = []
                 for s in Nbr_all[curCenter[0]][curCenter[1]]:
-                    print("Range: ", len(Nbr_all[curCenter[0]][curCenter[1]]))
-                    print("Test: ", s)
+                    #print("Range: ", len(Nbr_all[curCenter[0]][curCenter[1]]))
+                    #print("Test: ", s)
                     if unvisited[s[0]][s[1]]:
                         delta.append(s)
                         unvisited[s[0]][s[1]] = False
@@ -105,47 +144,68 @@ def myDBSCAN(imgData, epsilon=5, MinPts=3, max_iter = 100, tol=1e-20, diff_type=
         for i in range(0, len(unvisited)):
             for j in range(0, len(unvisited[i])):
                 #print("accessed")
-                print("New: ", unvisited[i][j])
-                print("Old: ", unvisited_old[i][j])
+                #print("New: ", unvisited[i][j])
+                #print("Old: ", unvisited_old[i][j])
                 if unvisited[i][j] != unvisited_old[i][j]:
                     tPair = (i, j)
                     Pairs.append(tPair)
-                    print("P: ", Pairs)
+                    #print("P: ", Pairs)
 
         cluster += 1
         cc += 1
         c_k = []
-        c_k.append(Pairs)
+        if (Pairs != []):
+            c_k.append(Pairs)
         for i in range(0, len(c_k)):
-            print(c_k[i])
-            tPair = (c_k[i][0],c_k[i][1])
-            omega.remove(tPair)
+            for j in range(0, len(c_k[i])):
+                #print("Trying to remove: ", c_k[i][j])
+                if c_k[i][j] in omega:
+                    omega.remove(c_k[i][j])
         ClusterArr.append(c_k)
+        print(cluster)
     return ClusterArr
-    #ToAdd: Color Average, Image Compiler, Test Clusters
 
+def ColorReturn(Clusters, ImgData):
+    R = 0
+    G = 0
+    B = 0
+    #print(Clusters[0][0], " ", Clusters[0][1])
+    for i in range(0, len(Clusters)):
+        R += ImgData[Clusters[i][0]][Clusters[i][1]][0]
+        G += ImgData[Clusters[i][0]][Clusters[i][1]][1]
+        B += ImgData[Clusters[i][0]][Clusters[i][1]][2]
+    R = R/len(Clusters)
+    G = G/len(Clusters)
+    B = B/len(Clusters)
+    RGB = (R, G, B)
+    return RGB
 
-
+def ImageReturn(Clusters, ImgData, RGB):
+    h = len(ImgData)
+    w = len(ImgData[0])
+    output = np.arange(0, h*w, 1, np.uint8)
+    for i in h:
+        for j in w:
+            print ("hi")
 
 
 #main
 def __main__(algo='DBSCAN'):
-
     #test Euclidian:
     file = Load_Data("rain.jpg")
     image_array = file.load()
-    one = image_array[20][20]
-    #print(one)
-    two = image_array[40][20]
-    myDBSCAN(image_array,epsilon=5,MinPts=20, dist=Dist.Euclidean)
+    newCluster = np.array(DBSCAN(image_array,epsilon=5,MinPts=30))
+    ClusterColorInfo = []
+    inc = 0;
+    for i in range(0, len(newCluster)):
+        for j in range(0, len(newCluster[i])):
+            if newCluster[i][0] != 0 or len(newCluster[i]) == 0:
+            #print(newCluster[i])
+                #revisedCluster[inc][j] = newCluster[i][j]
+                RGB = ColorReturn(newCluster[i][j], image_array)
+                ClusterColorInfo.append(RGB)
+                inc += 1
+                print(RGB)
 
-    print("Distance: ", Dist.Euclidean(one,two,2))
-    clusters = []
-    arrOfClusters = []
-    Hr = random.randrange(0,len(image_array))       #H
-    Wr = random.randrange(0,len(image_array[0]))    #w
-    print(image_array[Hr][Wr])
-    print(two)
-    print("Distance: ", Dist.Euclidean(image_array[Hr][Wr], two, 2))
 
 __main__()
